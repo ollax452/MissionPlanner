@@ -10,9 +10,104 @@ using MissionPlanner;
 using System.Collections;
 using System.Linq;
 using DirectShowLib;
-// test
+using System.Runtime.InteropServices;     // DLL support
+using System.Net.Sockets;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace MissionPlanner
 {
+    [StructLayout(LayoutKind.Sequential)]
+    public class QuadCopterStatus
+    {
+        public bool valid = false;
+        public double gps_latitude = 0;
+        public double gps_longitude = 0;
+        public double gps_altitude = 0;
+        public double gps_quality = 0;
+        public double gps_nrOfSatellites = 0;
+        public double gps_timeStamp = 0;
+        public double roll = 0;
+        public double pitch = 0;
+        public double yaw = 0;
+        public double rollMahoney = 0;
+        public double pitchMahoney = 0;
+        public double yawMahoney = 0;
+    }
+
+    public static class DllHelper
+    {
+        [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DisplayHelloFromDLL();
+
+        [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int MyFunc(long parm1);
+
+        [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool UDP_BUFFER(IntPtr buff, int buffLength,
+                                             ref double gps_latitude, ref double gps_longitude, ref double gps_altitude,
+                                             ref double gps_quality, ref double gps_nrOfSatellites, ref double gps_timeStamp,
+                                             ref double roll, ref double pitch, ref double yaw,
+                                             ref double rollMahoney, ref double pitchMahoney, ref double yawMahoney);
+    }
+
+    public class UdpHandler
+    {
+        static void SendUdp(int srcPort, string dstIp, int dstPort, byte[] data)
+        {
+            //SendUdp(12000, "127.0.0.1", 11000, Encoding.ASCII.GetBytes("Hello!"));
+            using (UdpClient c = new UdpClient(srcPort))
+                c.Send(data, data.Length, dstIp, dstPort);
+        }
+
+        public class ListenUdp
+        {
+            public QuadCopterStatus quadStatus = new QuadCopterStatus();
+            public const int listenPort = 11000;
+            private bool initialized = false;
+
+            public void UDPListener()
+            {
+                Task.Run(async () =>
+                {
+                    using (var udpClient = new UdpClient(listenPort))
+                    {
+                        while (true)
+                        {
+                            //IPEndPoint object will allow us to read datagrams sent from any source.
+                            var receivedResults = await udpClient.ReceiveAsync();
+                            string received_data = Encoding.ASCII.GetString(receivedResults.Buffer);
+                            int copylen = received_data.Length;
+                            // mer information hittas här: https://msdn.microsoft.com/en-us/library/system.intptr(v=vs.110).aspx
+                            IntPtr sptr = Marshal.StringToHGlobalAnsi(received_data); // Allocate HGlobal memory for source and destination strings
+                            //byte* src = (byte*)sptr.ToPointer();
+
+                            // mer information hittas här: https://msdn.microsoft.com/en-us/library/system.intptr(v=vs.110).aspx
+                            quadStatus.valid = DllHelper.UDP_BUFFER(sptr, copylen,
+                                                                    ref quadStatus.gps_latitude, ref quadStatus.gps_longitude, ref quadStatus.gps_altitude,
+                                                                    ref quadStatus.gps_quality, ref quadStatus.gps_nrOfSatellites, ref quadStatus.gps_timeStamp,
+                                                                    ref quadStatus.roll, ref quadStatus.pitch, ref quadStatus.yaw,
+                                                                    ref quadStatus.rollMahoney, ref quadStatus.pitchMahoney, ref quadStatus.yawMahoney);
+                            Marshal.FreeHGlobal(sptr);
+                            quadStatus.gps_altitude = quadStatus.gps_altitude + 2;
+                        }
+                    }
+                });
+            }
+
+            public QuadCopterStatus ReadPackage()
+            {
+                if (!initialized)
+                {
+                    UDPListener();
+                    initialized = true;
+                }
+                return quadStatus;
+            }
+        }
+    } // end of class UDPListener
+
     public class CurrentState : ICloneable
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
@@ -1388,6 +1483,7 @@ namespace MissionPlanner
         }
 
         private DateTime lastupdate = DateTime.Now;
+        private UdpHandler.ListenUdp udpReceiver = new UdpHandler.ListenUdp();
 
         private DateTime lastsecondcounter = DateTime.Now;
         private PointLatLngAlt lastpos = new PointLatLngAlt();
@@ -2115,6 +2211,23 @@ namespace MissionPlanner
                     }
 
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.GPS2_RAW);
+
+                    lat2 = 13;
+                    lng2 = 58;
+
+                    lat = 16.3; //skrivs längst ner på kartan!
+                    lng = 57.3;
+                    groundspeed2 = 22;
+
+                    QuadCopterStatus data = udpReceiver.ReadPackage();
+                    yaw = (float) data.gps_altitude;
+
+                    nav_roll = yaw;
+                    nav_bearing = yaw;
+                    target_bearing = yaw;
+                    roll = yaw;
+                    pitch = yaw;
+
                     if (mavLinkMessage != null)
                     {
                         var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps2_raw_t>();
