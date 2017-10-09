@@ -10,7 +10,7 @@ using MissionPlanner;
 using System.Collections;
 using System.Linq;
 using DirectShowLib;
-
+// test
 namespace MissionPlanner
 {
     public class CurrentState : ICloneable
