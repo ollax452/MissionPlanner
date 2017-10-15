@@ -77,19 +77,22 @@ namespace MissionPlanner
                         {
                             //IPEndPoint object will allow us to read datagrams sent from any source.
                             var receivedResults = await udpClient.ReceiveAsync();
-                            string received_data = Encoding.ASCII.GetString(receivedResults.Buffer);
-                            int copylen = received_data.Length;
+                            byte[] byteReceived = receivedResults.Buffer;
+                            IntPtr p = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(byte)) * byteReceived.Length);
+                            Marshal.Copy(byteReceived, 0, p, byteReceived.Length);
+                            //string received_data = Encoding.ASCII.GetString(receivedResults.Buffer);
+                            //int copylen = received_data.Length;
                             // mer information hittas här: https://msdn.microsoft.com/en-us/library/system.intptr(v=vs.110).aspx
-                            IntPtr sptr = Marshal.StringToHGlobalAnsi(received_data); // Allocate HGlobal memory for source and destination strings
+                            //IntPtr sptr = Marshal.StringToHGlobalAnsi(received_data); // Allocate HGlobal memory for source and destination strings
                             //byte* src = (byte*)sptr.ToPointer();
 
                             // mer information hittas här: https://msdn.microsoft.com/en-us/library/system.intptr(v=vs.110).aspx
-                            quadStatus.valid = DllHelper.UDP_BUFFER(sptr, copylen,
+                            quadStatus.valid = DllHelper.UDP_BUFFER(p, byteReceived.Length,
                                                                     ref quadStatus.gps_latitude, ref quadStatus.gps_longitude, ref quadStatus.gps_altitude,
                                                                     ref quadStatus.gps_quality, ref quadStatus.gps_nrOfSatellites, ref quadStatus.gps_timeStamp,
                                                                     ref quadStatus.roll, ref quadStatus.pitch, ref quadStatus.yaw,
                                                                     ref quadStatus.rollMahoney, ref quadStatus.pitchMahoney, ref quadStatus.yawMahoney);
-                            Marshal.FreeHGlobal(sptr);
+                            Marshal.FreeHGlobal(p);
                             quadStatus.gps_altitude = quadStatus.gps_altitude + 2;
                         }
                     }
@@ -2220,13 +2223,12 @@ namespace MissionPlanner
                     groundspeed2 = 22;
 
                     QuadCopterStatus data = udpReceiver.ReadPackage();
-                    yaw = (float) data.gps_altitude;
-
-                    nav_roll = yaw;
-                    nav_bearing = yaw;
-                    target_bearing = yaw;
-                    roll = yaw;
-                    pitch = yaw;
+                    yaw = (float) data.yawMahoney; // actual heading
+                    //nav_roll = 10;// (float) data.roll;
+                    //nav_bearing = 0;// (float) data.yawMahoney; // desired heading
+                    // target_bearing = 40;
+                    roll = (float) data.roll;
+                    pitch = (float) data.pitch;
 
                     if (mavLinkMessage != null)
                     {
