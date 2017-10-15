@@ -21,13 +21,16 @@ namespace MissionPlanner
     [StructLayout(LayoutKind.Sequential)]
     public class QuadCopterStatus
     {
-        public bool valid = false;
+        public bool validDecode = false;
+        public DateTime lastUpdatedData; 
+        public bool linkIsOk = false;
         public double gps_latitude = 0;
         public double gps_longitude = 0;
         public double gps_altitude = 0;
         public double gps_quality = 0;
         public double gps_nrOfSatellites = 0;
         public double gps_timeStamp = 0;
+        public bool gps_valid = false; // detta är inte implementerat än, jag måste kolla på serialiseringen av nmea, gps, den verkar vara lite konstig!
         public double roll = 0;
         public double pitch = 0;
         public double yaw = 0;
@@ -87,12 +90,16 @@ namespace MissionPlanner
                             //byte* src = (byte*)sptr.ToPointer();
 
                             // mer information hittas här: https://msdn.microsoft.com/en-us/library/system.intptr(v=vs.110).aspx
-                            quadStatus.valid = DllHelper.UDP_BUFFER(p, byteReceived.Length,
+                            quadStatus.validDecode = DllHelper.UDP_BUFFER(p, byteReceived.Length,
                                                                     ref quadStatus.gps_latitude, ref quadStatus.gps_longitude, ref quadStatus.gps_altitude,
                                                                     ref quadStatus.gps_quality, ref quadStatus.gps_nrOfSatellites, ref quadStatus.gps_timeStamp,
                                                                     ref quadStatus.roll, ref quadStatus.pitch, ref quadStatus.yaw,
                                                                     ref quadStatus.rollMahoney, ref quadStatus.pitchMahoney, ref quadStatus.yawMahoney);
                             Marshal.FreeHGlobal(p);
+                            if (quadStatus.validDecode)
+                            {
+                                quadStatus.lastUpdatedData = DateTime.Now;
+                            }
                             quadStatus.gps_altitude = quadStatus.gps_altitude + 2;
                         }
                     }
@@ -105,6 +112,10 @@ namespace MissionPlanner
                 {
                     UDPListener();
                     initialized = true;
+                }
+                if((DateTime.Now - quadStatus.lastUpdatedData).TotalSeconds >= 2)
+                {
+                    quadStatus.linkIsOk = false;
                 }
                 return quadStatus;
             }
@@ -2162,7 +2173,7 @@ namespace MissionPlanner
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.GLOBAL_POSITION_INT);
                     if (mavLinkMessage != null)
                     {
-                        var loc = mavLinkMessage.ToStructure<MAVLink.mavlink_global_position_int_t>();
+                        var loc = mavLinkMessage.ToStructure<MAVLink.mavlink_global_position_int_t>(); // GPS + fusioned with accelerometers!
 
                         // the new arhs deadreckoning may send 0 alt and 0 long. check for and undo
 
@@ -2189,12 +2200,12 @@ namespace MissionPlanner
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.GPS_RAW_INT);
                     if (mavLinkMessage != null)
                     {
-                        var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps_raw_int_t>();
+                        var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps_raw_int_t>(); // rådata från GPS:en
 
                         if (!useLocation)
                         {
-                            lat = gps.lat*1.0e-7;
-                            lng = gps.lon*1.0e-7;
+                            lat = gps.lat*1.0e-7; // rådata från GPS:en
+                            lng = gps.lon*1.0e-7; // rådata från GPS:en
 
                             altasl = gps.alt/1000.0f;
                             // alt = gps.alt; // using vfr as includes baro calc
@@ -2215,12 +2226,12 @@ namespace MissionPlanner
 
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.GPS2_RAW);
 
-                    lat2 = 13;
-                    lng2 = 58;
+                    //lat2 = 13; // vad är skillnaden?
+                    //lng2 = 58;
 
-                    lat = 16.3; //skrivs längst ner på kartan!
-                    lng = 57.3;
-                    groundspeed2 = 22;
+                    //lat = 16.3; //skrivs längst ner på kartan!
+                    //lng = 57.3;
+                    //groundspeed2 = 22;
 
                     QuadCopterStatus data = udpReceiver.ReadPackage();
                     yaw = (float) data.yawMahoney; // actual heading
@@ -2229,10 +2240,16 @@ namespace MissionPlanner
                     // target_bearing = 40;
                     roll = (float) data.roll;
                     pitch = (float) data.pitch;
-
+                    satcount = (float) data.gps_nrOfSatellites;
+                    if (data.gps_latitude > 0.5f && data.gps_longitude > 0.5f)
+                    {
+                        lat = data.gps_latitude;
+                        lng = data.gps_longitude;
+                    }
+                    
                     if (mavLinkMessage != null)
                     {
-                        var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps2_raw_t>();
+                        var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps2_raw_t>(); // second gps data, jag vet inte vad som menas med det, att man har två gps:er kanske
 
                         lat2 = gps.lat*1.0e-7;
                         lng2 = gps.lon*1.0e-7;
@@ -2250,7 +2267,7 @@ namespace MissionPlanner
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.GPS_STATUS);
                     if (mavLinkMessage != null)
                     {
-                        var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps_status_t>();
+                        var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps_status_t>(); // status för varje satellit!
                         satcount = gps.satellites_visible;
                     }
 
