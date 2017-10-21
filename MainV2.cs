@@ -1975,9 +1975,10 @@ namespace MissionPlanner
                     if (!MONO)
                     {
                         //joystick stuff
-
+                        MainV2.comPort.MAV.cs.joystickToQuadcopter.setToLost();
                         if (joystick != null && joystick.enabled)
                         {
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.setToOk();
                             if (!joystick.manual_control)
                             {
                                 MAVLink.mavlink_rc_channels_override_t rc = new MAVLink.mavlink_rc_channels_override_t();
