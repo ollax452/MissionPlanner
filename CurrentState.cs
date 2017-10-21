@@ -18,6 +18,55 @@ using System.Threading.Tasks;
 
 namespace MissionPlanner
 {
+    public class JoystickData
+    {
+        public void setToLost() {
+            joystickOk = false;
+            x = 0;
+            y = 0;
+            z = 0;
+            roll = 0;
+            pitch = 0;
+            yaw = 0;
+            tilt_up = 0;
+            tilt_down = 0;
+            pan_left = 0;
+            pan_right = 0;
+        }
+        public void setToOk() {
+            joystickOk = true;
+        }
+        public bool isLost() {
+            return !joystickOk;
+        }
+        public bool isOk() {
+            return joystickOk;
+        }
+
+        private bool joystickOk = false;
+        public Int16 x = 0;  
+        public Int16 y = 0;
+        public Int16 z = 0;
+        public Int16 roll = 0; // Int16 <-> int16
+        public Int16 pitch = 0;
+        public Int16 yaw = 0;
+        public Int16 tilt_up = 0;
+        public Int16 tilt_down = 0;
+        public Int16 pan_left = 0;
+        public Int16 pan_right = 0;
+        public Int16 motor_demand_1 = 0;
+        public Int16 motor_demand_2 = 0;
+        public Int16 motor_demand_3 = 0;
+        public Int16 motor_demand_4 = 0;
+        public Int16 cameraOn = 0;
+        public Int16 quadCopterOn = 0;
+        public Int16 printDebug = 0;
+        public Int16 calibrateMotors = 0;
+        public Int16 initMotors = 0;
+        public Int16 startLogging = 0;
+        public Int16 calibrateINS = 0;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public class QuadCopterStatus
     {
@@ -48,11 +97,32 @@ namespace MissionPlanner
         public static extern int MyFunc(long parm1);
 
         [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool UDP_BUFFER(IntPtr buff, int buffLength,
+        public static extern bool UdpToGroundStationData(IntPtr buff, int buffLength,
                                              ref double gps_latitude, ref double gps_longitude, ref double gps_altitude,
                                              ref double gps_quality, ref double gps_nrOfSatellites, ref double gps_timeStamp,
                                              ref double roll, ref double pitch, ref double yaw,
                                              ref double rollMahoney, ref double pitchMahoney, ref double yawMahoney);
+
+        [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr JoystickToUdpData(ref IntPtr output, ref int buffDataLength,
+                                                        ref Int16 x, ref Int16 y, ref Int16 z,
+                                                         ref Int16 roll1, ref Int16 pitch1, ref Int16 yaw1,
+                                                         ref Int16 tilt_up, ref Int16 tilt_down, ref Int16 pan_left, ref Int16 pan_right,
+                                                         ref Int16 motor_demand_1, ref Int16 motor_demand_2, ref Int16 motor_demand_3, ref Int16 motor_demand_4,
+                                                         ref Int16 cameraOn, ref Int16 quadCopterOn, ref Int16 printDebug, ref Int16 calibrateMotors,
+                                                         ref Int16 initMotors, ref Int16 startLogging, ref Int16 calibrateINS);
+
+        [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void UdpToJoystickData(ref IntPtr buffData, int buffDataLength,
+                                                        ref Int16 x, ref Int16 y, ref Int16 z,
+                                                        ref Int16 roll1, ref Int16 pitch1, ref Int16 yaw1,
+                                                        ref Int16 tilt_up, ref Int16 tilt_down, ref Int16 pan_left, ref Int16 pan_right,
+                                                        ref Int16 motor_demand_1, ref Int16 motor_demand_2, ref Int16 motor_demand_3, ref Int16 motor_demand_4,
+                                                        ref Int16 cameraOn, ref Int16 quadCopterOn, ref Int16 printDebug, ref Int16 calibrateMotors,
+                                                        ref Int16 initMotors, ref Int16 startLogging, ref Int16 calibrateINS);
+
+        [DllImport("C:\\Quadcopter\\trunk\\Components\\Middleware\\Serialization\\ApplicationC++\\Debug\\DLLCall.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Free_UdpToJoystickData(IntPtr buffer, IntPtr buffData);
     }
 
     public class UdpHandler
@@ -67,7 +137,7 @@ namespace MissionPlanner
         public class ListenUdp
         {
             public QuadCopterStatus quadStatus = new QuadCopterStatus();
-            public const int listenPort = 11000;
+            public const int listenPort = 11001;
             private bool initialized = false;
 
             public void UDPListener()
@@ -90,7 +160,7 @@ namespace MissionPlanner
                             //byte* src = (byte*)sptr.ToPointer();
 
                             // mer information hittas här: https://msdn.microsoft.com/en-us/library/system.intptr(v=vs.110).aspx
-                            quadStatus.validDecode = DllHelper.UDP_BUFFER(p, byteReceived.Length,
+                            quadStatus.validDecode = DllHelper.UdpToGroundStationData(p, byteReceived.Length,
                                                                     ref quadStatus.gps_latitude, ref quadStatus.gps_longitude, ref quadStatus.gps_altitude,
                                                                     ref quadStatus.gps_quality, ref quadStatus.gps_nrOfSatellites, ref quadStatus.gps_timeStamp,
                                                                     ref quadStatus.roll, ref quadStatus.pitch, ref quadStatus.yaw,
@@ -100,10 +170,40 @@ namespace MissionPlanner
                             {
                                 quadStatus.lastUpdatedData = DateTime.Now;
                             }
-                            quadStatus.gps_altitude = quadStatus.gps_altitude + 2;
                         }
                     }
                 });
+            }
+
+            public void SendPackage(ref JoystickData joy)
+            {
+                int buffDataLength = 0;
+                IntPtr output = new IntPtr(0);
+
+                IntPtr buffObject = DllHelper.JoystickToUdpData(ref output, ref buffDataLength,
+                                       ref joy.x,              ref joy.y,              ref joy.z,
+                                       ref joy.roll ,          ref joy.pitch,          ref joy.yaw,
+                                       ref joy.tilt_up,        ref joy.tilt_down,      ref joy.pan_left,       ref joy.pan_right,
+                                       ref joy.motor_demand_1, ref joy.motor_demand_2, ref joy.motor_demand_3, ref joy.motor_demand_4,
+                                       ref joy.cameraOn,       ref joy.quadCopterOn,   ref joy.printDebug,     ref joy.calibrateMotors,
+                                       ref joy.initMotors,     ref joy.startLogging,   ref joy.calibrateINS);
+
+                if (joy.isOk()) {
+                    byte[] dataBuffToSend = new byte[buffDataLength];
+                    Marshal.Copy(output, dataBuffToSend, 0, buffDataLength);
+                    SendUdp(12000, "10.73.100.1", 11000, dataBuffToSend); // The quadcopter ip is set to 10.73.100.1 and default listen on port
+                }
+
+                /*
+                DllHelper.UdpToJoystickData(ref output, buffDataLength,
+                                       ref joy.x, ref joy.y, ref joy.z,
+                                       ref joy.roll, ref joy.pitch, ref joy.yaw,
+                                       ref joy.tilt_up, ref joy.tilt_down, ref joy.pan_left, ref joy.pan_right,
+                                       ref joy.motor_demand_1, ref joy.motor_demand_2, ref joy.motor_demand_3, ref joy.motor_demand_4,
+                                       ref joy.cameraOn, ref joy.quadCopterOn, ref joy.printDebug, ref joy.calibrateMotors,
+                                       ref joy.initMotors, ref joy.startLogging, ref joy.calibrateINS);
+                */
+                DllHelper.Free_UdpToJoystickData(buffObject, output);
             }
 
             public QuadCopterStatus ReadPackage()
@@ -1393,6 +1493,7 @@ namespace MissionPlanner
         public int hilch7;
         public int hilch8;
 
+        public JoystickData joystickToQuadcopter = new JoystickData();
         // rc override
         public short rcoverridech1;//{ get; set; }
         public short rcoverridech2;// { get; set; }
@@ -2234,6 +2335,7 @@ namespace MissionPlanner
                     //groundspeed2 = 22;
 
                     QuadCopterStatus data = udpReceiver.ReadPackage();
+                    udpReceiver.SendPackage(ref joystickToQuadcopter);
                     yaw = (float) data.yawMahoney; // actual heading
                     //nav_roll = 10;// (float) data.roll;
                     //nav_bearing = 0;// (float) data.yawMahoney; // desired heading
@@ -2246,7 +2348,20 @@ namespace MissionPlanner
                         lat = data.gps_latitude;
                         lng = data.gps_longitude;
                     }
-                    
+
+                    // Send data to the Quadcopter
+                    Console.WriteLine("PanRight" + joystickToQuadcopter.pan_right); // det här ska flyttas till joystick tråden MainV2!, den här tråden är för uppdatering av GUI grejer, den är för långsam!!
+                    Console.WriteLine("PanLeft" + joystickToQuadcopter.pan_left);
+                    Console.WriteLine("TiltUp" + joystickToQuadcopter.tilt_up);
+                    Console.WriteLine("TiltDown" + joystickToQuadcopter.tilt_down);
+                    Console.WriteLine("CalibrateINS" + joystickToQuadcopter.calibrateINS);
+                    Console.WriteLine("CalibrateMotors" + joystickToQuadcopter.calibrateMotors);
+                    Console.WriteLine("PrintDebug" + joystickToQuadcopter.printDebug);
+                    Console.WriteLine("CameraOn" + joystickToQuadcopter.cameraOn);
+                    Console.WriteLine("Axis-X: " + joystickToQuadcopter.x);
+                    Console.WriteLine("Axis-Y: " + joystickToQuadcopter.y);
+                    Console.WriteLine("Jostick Lost" + MainV2.comPort.MAV.cs.joystickToQuadcopter.isLost());
+
                     if (mavLinkMessage != null)
                     {
                         var gps = mavLinkMessage.ToStructure<MAVLink.mavlink_gps2_raw_t>(); // second gps data, jag vet inte vad som menas med det, att man har två gps:er kanske

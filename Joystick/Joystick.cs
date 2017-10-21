@@ -722,14 +722,73 @@ namespace MissionPlanner.Joystick
                     }
                     else
                     {
+                        if (isButtonPressed(0))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.pan_right = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.pan_right = 0;
+
+                        if (isButtonPressed(1))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.pan_left = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.pan_left = 0;
+
+                        if (isButtonPressed(2))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.tilt_down = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.tilt_down = 0;
+
+                        if (isButtonPressed(3))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.tilt_up = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.tilt_up = 0;
+
+                        if (isButtonPressed(4))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.calibrateINS = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.calibrateINS = 0;
+
+                        if (isButtonPressed(5))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.calibrateMotors = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.calibrateMotors = 0;
+
+                        if (isButtonPressed(6))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.printDebug = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.printDebug = 0;
+
+                        if (isButtonPressed(7))
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.cameraOn = 1;
+                        else
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.cameraOn = 0;
+
+                        if (isButtonPressed(8))
+                        {
+                            int apa = 22;
+                        }
+                        if (isButtonPressed(9))
+                        {
+                            int apa = 22;
+                        }
+                        if (isButtonPressed(10))
+                        {
+                            int apa = 22;
+                        }
+
                         if (getJoystickAxis(1) != Joystick.joystickaxis.None)
+                        {
                             MainV2.comPort.MAV.cs.rcoverridech1 = pickchannel(1, JoyChannels[1].axis,
                                 JoyChannels[1].reverse, JoyChannels[1].expo);
-                                //(ushort)(((int)state.Rz / 65.535) + 1000);
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.x = MainV2.comPort.MAV.cs.rcoverridech1;
+                            //(ushort)(((int)state.Rz / 65.535) + 1000);
+                        }
                         if (getJoystickAxis(2) != Joystick.joystickaxis.None)
+                        {
                             MainV2.comPort.MAV.cs.rcoverridech2 = pickchannel(2, JoyChannels[2].axis,
                                 JoyChannels[2].reverse, JoyChannels[2].expo);
-                                //(ushort)(((int)state.Y / 65.535) + 1000);
+                            MainV2.comPort.MAV.cs.joystickToQuadcopter.y = MainV2.comPort.MAV.cs.rcoverridech2;
+                            //(ushort)(((int)state.Y / 65.535) + 1000);
+                        }
                     }
                     if (getJoystickAxis(3) != Joystick.joystickaxis.None)
                         MainV2.comPort.MAV.cs.rcoverridech3 = pickchannel(3, JoyChannels[3].axis, JoyChannels[3].reverse,
@@ -761,6 +820,7 @@ namespace MissionPlanner.Joystick
                 {
                     log.Error(ex);
                     clearRCOverride();
+                    MainV2.comPort.MAV.cs.joystickToQuadcopter.setToLost();
                     MainV2.instance.Invoke((System.Action)
                         delegate { CustomMessageBox.Show("Lost Joystick", "Lost Joystick"); });
                     return;
